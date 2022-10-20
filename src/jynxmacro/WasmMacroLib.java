@@ -81,20 +81,35 @@ public class WasmMacroLib  extends MacroLib {
         return EnumSet.of(MacroOption.STRUCTURED_LABELS,MacroOption.UNSIGNED_LONG,MacroOption.INDENT);
     }
 
+    private static final String VT_REGEX = "I64|I32|F64|F32";
+    private final static String VT_RETURN_REGEX = VT_REGEX + "|\\(\\)"; // add ()
+    private final static String PARM_REGEX = String.format("\\(((%s)(,(%s))*)?\\)",VT_REGEX,VT_REGEX);
+    private final static String DESC_REGEX = String.format("%s->(%s)",PARM_REGEX,VT_RETURN_REGEX);
+    
     public static String translateParm(String str) {
-        if (!str.contains("->")) {
+        if (!str.contains("->") || str.contains(";") || !str.contains("(")) {
             return str;
         }
-        assert !str.contains(";") && str.contains("->");
-        str = str.replace("->V00", "V");
-        str = str.replace("->()", "V");
-        str = str.replace("->", "");
-        str = str.replace(",","");
-        str = str.replace("I32", "I");
-        str = str.replace("I64", "J");
-        str = str.replace("F32", "F");
-        str = str.replace("F64", "D");
-        return str;
+        int index = str.indexOf('(');
+        String name = str.substring(0,index);
+        String desc = str.substring(index);
+        if (!desc.matches(DESC_REGEX)) {
+            return str;
+        }
+
+        index = desc.indexOf("->");
+        String parm = desc.substring(0, index);
+        String rtype = desc.substring(index + 2);
+        if (rtype.equals("()")) {
+            rtype = "V";
+        }
+        desc = (parm + rtype)
+            .replace(",","")
+            .replace("I32", "I")
+            .replace("I64", "J")
+            .replace("F32", "F")
+            .replace("F64", "D");
+        return name + desc;
     }
     
     public static String translateOwner(String classname, String str) {
