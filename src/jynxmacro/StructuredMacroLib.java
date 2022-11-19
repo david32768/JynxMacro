@@ -4,6 +4,7 @@ import java.util.EnumSet;
 import java.util.stream.Stream;
 
 import static jynx2asm.ops.ExtendedOps.*;
+import jynx2asm.ops.IndentType;
 import static jynx2asm.ops.JvmOp.*;
 import static jynx2asm.ops.LineOps.*;
 import static jynx2asm.ops.SelectOps.xxx_xreturn;
@@ -156,26 +157,20 @@ public class StructuredMacroLib extends MacroLib {
         }
 
         @Override
-        public boolean reduceIndentBefore() {
-            switch(this) {
-                case ext_ELSE:
-                case ext_END:
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        @Override
-        public boolean increaseIndentAfter() {
-            switch(this) {
+        public IndentType indentType() {
+            switch (this) {
                 case ext_BLOCK:
                 case ext_LOOP:
+                    return IndentType.BEGIN;
                 case ext_ELSE:
-                    return true;
-                default:
-                    return name().startsWith("ext_IF_");
+                    return IndentType.END;
+                case ext_END:
+                    return IndentType.END;
             }
+            if (name().startsWith("ext_IF_")) {
+                return IndentType.BEGIN;
+            }
+            return IndentType.NONE;
         }
 
         @Override
