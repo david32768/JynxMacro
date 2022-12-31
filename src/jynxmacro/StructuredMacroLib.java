@@ -4,11 +4,11 @@ import java.util.EnumSet;
 import java.util.stream.Stream;
 
 import static jynx2asm.ops.ExtendedOps.*;
-import jynx2asm.ops.IndentType;
 import static jynx2asm.ops.JvmOp.*;
 import static jynx2asm.ops.LineOps.*;
 import static jynx2asm.ops.SelectOps.xxx_xreturn;
 
+import jynx2asm.ops.IndentType;
 import jynx2asm.ops.JynxOp;
 import jynx2asm.ops.MacroLib;
 import jynx2asm.ops.MacroOp;
@@ -42,8 +42,8 @@ public class StructuredMacroLib extends MacroLib {
         ext_LOOP(mac_label,tok_dup,lab_push,xxx_label),
         ext_RETURN(xxx_xreturn),
 
-        ext_ELSE(lab_peek_if,asm_goto,lab_peek_else,xxx_label),
-        ext_END(lab_peek_else,xxx_labelweak,lab_pop,xxx_labelweak),
+        ext_ELSE(lab_peek_if,xxx_goto_weak,lab_peek_else,xxx_label),
+        ext_END(lab_peek_else,xxx_label_weak,lab_pop,xxx_label_weak),
 
         aux_iflabel(mac_label,lab_push_if,lab_peek_else),
         
@@ -163,7 +163,7 @@ public class StructuredMacroLib extends MacroLib {
                 case ext_LOOP:
                     return IndentType.BEGIN;
                 case ext_ELSE:
-                    return IndentType.END;
+                    return IndentType.ELSE;
                 case ext_END:
                     return IndentType.END;
             }
