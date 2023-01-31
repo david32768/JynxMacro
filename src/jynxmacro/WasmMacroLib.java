@@ -166,12 +166,13 @@ public class WasmMacroLib  extends StructuredMacroLib {
         
         aux_newtable(insertMethod(WASM_TABLE,"getInstance","()" + WASM_TABLE_L),asm_invokestatic),
         aux_newmem(insertMethod(WASM_STORAGE,"getInstance","(II)" + WASM_STORAGE_L),asm_invokestatic),
+        aux_mem(AdjustToken.surround(GS_MEMORY_PREFIX, GS_MEMORY_POSTFIX)),
+        aux_addbase0(insert("+0"),tok_swap),
 
         // init functions for initialising memory
         MEMORY_NEW(asm_ldc,asm_ldc,aux_newmem),
         MEMORY_GLOBAL_GET(insert(WASM_STORAGE_L),tok_swap,asm_getstatic),
         MEMORY_GLOBAL_SET(insert(WASM_STORAGE_L),tok_swap,asm_putstatic),
-        aux_mem(AdjustToken.surround(GS_MEMORY_PREFIX, GS_MEMORY_POSTFIX)),
         MEMORY_CHECK(asm_ldc,asm_ldc,aux_mem,WasmMacroLib.dynStorage("checkInstance", "(II)V")),
         
         STRING_CONST(asm_ldc),
@@ -219,9 +220,9 @@ public class WasmMacroLib  extends StructuredMacroLib {
         SELECT(mac_label, asm_ifne, aux_swapnn, mac_label, xxx_label,  aux_popn),
         UNWIND(DynamicOp.of("unwind", null, WASM_HELPER, "unwindBootstrap")),
         // variable access
-        LOCAL_GET(prepend("$"),xxx_xload),
-        LOCAL_SET(prepend("$"),xxx_xstore),
-        LOCAL_TEE(aux_dupn,prepend("$"),xxx_xstore), // TEE pops and pushes value on stack
+        LOCAL_GET(xxx_xload),
+        LOCAL_SET(xxx_xstore),
+        LOCAL_TEE(aux_dupn,xxx_xstore), // TEE pops and pushes value on stack
         I32_GLOBAL_GET(insert("I"),tok_swap,asm_getstatic),
         I64_GLOBAL_GET(insert("J"),tok_swap,asm_getstatic),
         F32_GLOBAL_GET(insert("F"),tok_swap,asm_getstatic),
@@ -265,10 +266,10 @@ public class WasmMacroLib  extends StructuredMacroLib {
         MEMORY_SIZE(aux_mem,WasmMacroLib.dynStorage("currentPages", "()I")),
         MEMORY_GROW(aux_mem,WasmMacroLib.dynStorage("grow", "(I)I")),
         // some bulk memory ops
-        MEMORY_FILL(aux_mem,WasmMacroLib.dynStorage("fill", "(III)V")),
+        MEMORY_FILL(aux_mem,aux_addbase0,WasmMacroLib.dynLoadStore("fill", "(III)V")),
         MEMORY_COPY(tok_swap, // dest src -> src dest ; NB not specified which order: dest src assumed
-                    aux_mem,WasmMacroLib.dynStorage("getByteArray", "(II)[B"),
-                    aux_mem,WasmMacroLib.dynStorage("putByteArray", "(I[B)V")),
+                    aux_mem,aux_addbase0,WasmMacroLib.dynLoadStore("getByteArray", "(II)[B"),
+                    aux_mem,aux_addbase0,WasmMacroLib.dynLoadStore("putByteArray", "(I[B)V")),
 
         // constants
         I32_CONST(opc_ildc),
