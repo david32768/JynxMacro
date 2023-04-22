@@ -3,8 +3,8 @@ package jynxmacro;
 import java.lang.invoke.MethodHandle;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.function.BinaryOperator;
-import java.util.function.UnaryOperator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static jynx2asm.ops.AdjustToken.*;
@@ -26,7 +26,11 @@ import jynx2asm.ops.SelectOps;
 public class WasmMacroLib  extends StructuredMacroLib {
 
     private final static String NAME = "wasm32MVP";
-
+    
+    private final static String NUMBER_L = nameL(Number.class);
+    private final static String STRING_L = nameL(String.class);
+    private final static String ASSERTION_ERROR_L = nameL(AssertionError.class);
+    
     private final static String WASM_STORAGE = "wasmrun/Storage";
     private final static String WASM_STORAGE_L = nameL(WASM_STORAGE);
     private final static String WASM_HELPER = "wasmrun/Helper";
@@ -70,64 +74,44 @@ public class WasmMacroLib  extends StructuredMacroLib {
     }
 
     @Override
-    public UnaryOperator<String> parmTranslator() {
-        return WasmMacroLib::translateParm;
-    }
-
-    @Override
-    public BinaryOperator<String> ownerTranslator() {
-        return WasmMacroLib::translateOwner;
-    }
-
-    @Override
     public EnumSet<MacroOption> getOptions() {
         EnumSet<MacroOption> result = super.getOptions();
         result.add(MacroOption.UNSIGNED_LONG);
         return result;
     }
 
-    private static final String VT_REGEX = "I64|I32|F64|F32";
-    private final static String VT_RETURN_REGEX = VT_REGEX + "|\\(\\)"; // add ()
-    private final static String PARM_REGEX = String.format("\\(((%s)(,(%s))*)?\\)",VT_REGEX,VT_REGEX);
-    private final static String DESC_REGEX = String.format("%s->(%s)",PARM_REGEX,VT_RETURN_REGEX);
+    private static final Map<String, String> PARM_MAP;
     
-    private static String translateParm(String str) {
-        if (!str.contains("->") || str.contains(";") || !str.contains("(")) {
-            return str;
-        }
-        int index = str.indexOf('(');
-        String name = str.substring(0,index);
-        String desc = str.substring(index);
-        if (!desc.matches(DESC_REGEX)) {
-            return str;
-        }
+    static {
+        PARM_MAP = new HashMap<>();
+        PARM_MAP.put("I32", "I");
+        PARM_MAP.put("I64", "J");
+        PARM_MAP.put("F32", "F");
+        PARM_MAP.put("F64", "D");
+    }
 
-        index = desc.indexOf("->");
-        String parm = desc.substring(0, index);
-        String rtype = desc.substring(index + 2);
-        if (rtype.equals("()")) {
-            rtype = "V";
-        }
-        desc = (parm + rtype)
-            .replace(",","")
-            .replace("I32", "I")
-            .replace("I64", "J")
-            .replace("F32", "F")
-            .replace("F64", "D");
-        return name + desc;
+    @Override
+    public Map<String, String> parmTranslations() {
+        return PARM_MAP;
     }
     
+    private static final Map<String, String> OWNER_MAP;
     private static final String WASI = "Wasi_snapshot_preview1"; 
+    private static final String WASI_PACKAGE = "wasi/trampoline";
+    private static final String WASI_OWNER = WASI_PACKAGE + "/" + WASI;
+    private static final String JYNX_WASI = "JYNX_WASI";
     
-    private static String translateOwner(String classname, String str) {
-        if (str == null || str.equals(".")) {
-            return classname;
-        }
-        if ( str.equals("JYNX_WASI") || str.equals(WASI)) {
-            return "wasi/trampoline/" + WASI;
-        }
-        return str;
+    static {
+        OWNER_MAP = new HashMap<>();
+        OWNER_MAP.put(WASI, WASI_OWNER);
+        OWNER_MAP.put(JYNX_WASI, WASI_OWNER);
     }
+
+    @Override
+    public Map<String, String> ownerTranslations() {
+        return OWNER_MAP;
+    }
+    
     
     private static DynamicOp dynStorage(String method, String parms) {
         return DynamicOp.withBootParms(method, parms, WASM_STORAGE,
@@ -176,7 +160,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
         MEMORY_CHECK(asm_ldc,asm_ldc,aux_mem,WasmMacroLib.dynStorage("checkInstance", "(II)V")),
         
         STRING_CONST(asm_ldc),
-        BASE64_STORE(aux_mem,WasmMacroLib.dynLoadStore("putBase64String", "(ILjava/lang/String;)V")),
+        BASE64_STORE(aux_mem,WasmMacroLib.dynLoadStore("putBase64String", "(I" + STRING_L + ")V")),
         
         // init functions for initialising table
         TABLE_NEW(aux_newtable),
@@ -190,9 +174,13 @@ public class WasmMacroLib  extends StructuredMacroLib {
                 insertMethod(WASM_TABLE,"add","(I" + MH_ARRAY_L + ")" + WASM_TABLE_L),
                 asm_invokevirtual
         ),
-
+        // debug functions
+        LOG(SelectOps.stackILFDA(inv_ibox, inv_lbox, inv_fbox, inv_dbox, asm_nop),
+                asm_ldc,
+                insertMethod(WASM_HELPER,"log","(" + NUMBER_L + STRING_L + ")V"),
+                asm_invokestatic),
         // control operators
-        UNREACHABLE(insertMethod(WASM_HELPER ,"unreachable","()Ljava/lang/AssertionError;"),asm_invokestatic,asm_athrow),
+        UNREACHABLE(insertMethod(WASM_HELPER ,"unreachable","()" + ASSERTION_ERROR_L),asm_invokestatic,asm_athrow),
         BLOCK(ext_BLOCK),
         LOOP(ext_LOOP),
         IF(ext_IF_NEZ),
