@@ -1,6 +1,8 @@
 package jynxmacro;
 
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static jynx2asm.ops.ExtendedOps.*;
@@ -17,14 +19,16 @@ import jynx2asm.ops.MacroOption;
 public class StructuredMacroLib extends MacroLib {
             
     private final static String NAME = "structured";
-        
-    @Override
-    public Stream<MacroOp> streamExternal() {
-        return Stream.of(StructuredOps.values())
-                .filter(StructuredOps::isExternal)
-                .map(m->(MacroOp)m);
-    }
 
+    @Override
+    public Map<String, JynxOp> getMacros() {
+        Map<String,JynxOp> map = new HashMap<>();
+        Stream.of(StructuredOps.values())
+                .filter(m -> m.name().startsWith("ext_"))
+                .forEach(m -> map.put(m.toString(),m));
+        return map;
+    }
+        
     @Override
     public String name() {
         return NAME;
@@ -173,10 +177,5 @@ public class StructuredMacroLib extends MacroLib {
             return IndentType.NONE;
         }
 
-        @Override
-        public boolean isExternal() {
-            return name().startsWith("ext_");
-        }
-        
     }
 }

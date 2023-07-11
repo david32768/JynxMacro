@@ -1,7 +1,6 @@
 package jynxmacro;
 
 import java.lang.invoke.MethodHandle;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,58 +15,44 @@ import static jynx2asm.ops.SelectOps.*;
 import static jynxmacro.StructuredMacroLib.StructuredOps.*;
 
 import jynx2asm.ops.AdjustToken;
+import jynx2asm.ops.CallOp;
 import jynx2asm.ops.DynamicOp;
 import jynx2asm.ops.IndentType;
 import jynx2asm.ops.JynxOp;
+import jynx2asm.ops.MacroLib;
 import jynx2asm.ops.MacroOp;
 import jynx2asm.ops.MacroOption;
 import jynx2asm.ops.SelectOps;
 
-public class WasmMacroLib  extends StructuredMacroLib {
+public class WasmMacroLib  extends MacroLib {
 
     private final static String NAME = "wasm32MVP";
-    
-    private final static String NUMBER_L = nameL(Number.class);
-    private final static String STRING_L = nameL(String.class);
-    private final static String ASSERTION_ERROR_L = nameL(AssertionError.class);
     
     private final static String WASM_STORAGE = "wasmrun/Storage";
     private final static String WASM_STORAGE_L = nameL(WASM_STORAGE);
     private final static String WASM_HELPER = "wasmrun/Helper";
     private final static String WASM_TABLE = "wasmrun/Table";
     private final static String WASM_TABLE_L =  nameL(WASM_TABLE);
-    private final static String MH_ARRAY_L = nameL(MethodHandle[].class);
-    private final static String MH_L = nameL(MethodHandle.class);
+    private final static String MH_ARRAY_L = CallOp.parmName(MethodHandle[].class);
+    private final static String MH_L = CallOp.parmName(MethodHandle.class);
     private final static String TABLE_PREFIX = "__Table__";
     private final static String MEMORY_PREFIX = "__Memory__";
     private final static String GS_MEMORY_PREFIX = "GS:" + MEMORY_PREFIX;
     private final static String GS_MEMORY_POSTFIX = "()" + WASM_STORAGE_L;
 
-    private static String name(Class<?> klass) {
-        assert !klass.isArray();
-        return klass.getName().replace(".","/");
-    }
-    
     private static String nameL(String classname) {
         return 'L' + classname + ';'; 
     }
 
-    private static String nameL(Class<?> klass) {
-        if (klass.isArray()) {
-            return klass.getName().replace(".","/");
-        } else {
-            assert !klass.isPrimitive();
-            return nameL(name(klass));
-        }
-    }
-
     @Override
-    public Stream<MacroOp> streamExternal() {
-        return Arrays.stream(WasmOps.values())
-            .filter(WasmOps::isExternal)
-            .map(m->(MacroOp)m);
+    public Map<String, JynxOp> getMacros() {
+        Map<String,JynxOp> map = new HashMap<>();
+        Stream.of(WasmOps.values())
+                .filter(m -> Character.isUpperCase(m.name().codePointAt(0)))
+                .forEach(m -> map.put(m.toString(),m));
+        return map;
     }
-
+        
     @Override
     public String name() {
         return NAME;
@@ -75,9 +60,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
 
     @Override
     public EnumSet<MacroOption> getOptions() {
-        EnumSet<MacroOption> result = super.getOptions();
-        result.add(MacroOption.UNSIGNED_LONG);
-        return result;
+        return EnumSet.of(MacroOption.STRUCTURED_LABELS, MacroOption.INDENT, MacroOption.UNSIGNED_LONG);
     }
 
     private static final Map<String, String> PARM_MAP;
@@ -112,6 +95,9 @@ public class WasmMacroLib  extends StructuredMacroLib {
         return OWNER_MAP;
     }
     
+    private static JynxOp callHelper(String methodname, String desc) {
+        return CallOp.of(WASM_HELPER, methodname, desc);
+    }
     
     private static DynamicOp dynStorage(String method, String parms) {
         return DynamicOp.withBootParms(method, parms, WASM_STORAGE,
@@ -145,11 +131,11 @@ public class WasmMacroLib  extends StructuredMacroLib {
         aux_dupn_xn(SelectOps.of12(asm_dup_x1,asm_dup2_x2)),
         aux_swapnn(aux_dupn_xn, aux_popn),
 
-        aux_fstd_NaN(insertMethod(WASM_HELPER,"arithmeticFloatNaN","(F)F"),asm_invokestatic),
-        aux_dstd_NaN(insertMethod(WASM_HELPER,"arithmeticDoubleNaN","(D)D"),asm_invokestatic),
+        aux_fstd_NaN(callHelper("arithmeticFloatNaN","(F)F")),
+        aux_dstd_NaN(callHelper("arithmeticDoubleNaN","(D)D")),
         
-        aux_newtable(insertMethod(WASM_TABLE,"getInstance","()" + WASM_TABLE_L),asm_invokestatic),
-        aux_newmem(insertMethod(WASM_STORAGE,"getInstance","(II)" + WASM_STORAGE_L),asm_invokestatic),
+        aux_newtable(CallOp.of(WASM_TABLE,"getInstance","()" + WASM_TABLE_L)),
+        aux_newmem(CallOp.of(WASM_STORAGE,"getInstance","(II)" + WASM_STORAGE_L)),
         aux_mem(AdjustToken.surround(GS_MEMORY_PREFIX, GS_MEMORY_POSTFIX)),
         aux_addbase0(insert("+0"),tok_swap),
 
@@ -160,7 +146,8 @@ public class WasmMacroLib  extends StructuredMacroLib {
         MEMORY_CHECK(asm_ldc,asm_ldc,aux_mem,WasmMacroLib.dynStorage("checkInstance", "(II)V")),
         
         STRING_CONST(asm_ldc),
-        BASE64_STORE(aux_mem,WasmMacroLib.dynLoadStore("putBase64String", "(I" + STRING_L + ")V")),
+        BASE64_STORE(aux_mem,WasmMacroLib.dynLoadStore("putBase64String",
+                CallOp.descFrom(void.class, int.class,String.class))),
         
         // init functions for initialising table
         TABLE_NEW(aux_newtable),
@@ -174,13 +161,19 @@ public class WasmMacroLib  extends StructuredMacroLib {
                 insertMethod(WASM_TABLE,"add","(I" + MH_ARRAY_L + ")" + WASM_TABLE_L),
                 asm_invokevirtual
         ),
+        // init local
+        I32_LOCAL_INIT(ext_izero),
+        I64_LOCAL_INIT(ext_lzero),
+        F32_LOCAL_INIT(ext_fzero),
+        F64_LOCAL_INIT(ext_dzero),
         // debug functions
         LOG(SelectOps.stackILFDA(inv_ibox, inv_lbox, inv_fbox, inv_dbox, asm_nop),
                 asm_ldc,
-                insertMethod(WASM_HELPER,"log","(" + NUMBER_L + STRING_L + ")V"),
-                asm_invokestatic),
+                callHelper("log",CallOp.descFrom(void.class, Number.class, String.class))),
+        
+        
         // control operators
-        UNREACHABLE(insertMethod(WASM_HELPER ,"unreachable","()" + ASSERTION_ERROR_L),asm_invokestatic,asm_athrow),
+        UNREACHABLE(callHelper("unreachable",CallOp.descFrom(AssertionError.class)), asm_athrow),
         BLOCK(ext_BLOCK),
         LOOP(ext_LOOP),
         IF(ext_IF_NEZ),
@@ -314,7 +307,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
         I32_ADD(asm_iadd),
         I32_SUB(asm_isub),
         I32_MUL(asm_imul),
-        I32_DIV_S(insertMethod(WASM_HELPER,"intDiv","(II)I"),asm_invokestatic),
+        I32_DIV_S(callHelper("intDiv","(II)I")),
         I32_DIV_U(inv_iudiv),
         I32_REM_S(asm_irem),
         I32_REM_U(inv_iurem),
@@ -336,7 +329,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
         I64_ADD(asm_ladd),
         I64_SUB(asm_lsub),
         I64_MUL(asm_lmul),
-        I64_DIV_S(insertMethod(WASM_HELPER,"longDiv","(JJ)J"),asm_invokestatic),
+        I64_DIV_S(callHelper("longDiv","(JJ)J")),
         I64_DIV_U(inv_ludiv),
         I64_REM_S(asm_lrem),
         I64_REM_U(inv_lurem),
@@ -355,7 +348,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
         F32_NEG(asm_fneg),
         F32_CEIL(asm_f2d, inv_dceil, asm_d2f),
         F32_FLOOR(asm_f2d, inv_dfloor, asm_d2f),
-        F32_TRUNC(insertMethod(WASM_HELPER ,"truncFloat","(F)F"), asm_invokestatic),
+        F32_TRUNC(callHelper("truncFloat","(F)F")),
         F32_NEAREST(asm_f2d, inv_drint, asm_d2f),
         F32_SQRT(asm_f2d, inv_dsqrt, asm_d2f),
 
@@ -371,7 +364,7 @@ public class WasmMacroLib  extends StructuredMacroLib {
         F64_NEG(asm_dneg),
         F64_CEIL(inv_dceil,aux_dstd_NaN),
         F64_FLOOR(inv_dfloor,aux_dstd_NaN),
-        F64_TRUNC(insertMethod(WASM_HELPER ,"truncDouble","(D)D"),asm_invokestatic),
+        F64_TRUNC(callHelper("truncDouble","(D)D")),
         F64_NEAREST(inv_drint),
         F64_SQRT(inv_dsqrt),
 
@@ -385,36 +378,36 @@ public class WasmMacroLib  extends StructuredMacroLib {
 
         // conversions
         I32_WRAP_I64(asm_l2i),
-        I32_TRUNC_S_F32(insertMethod(WASM_HELPER,"floatToInt","(F)I"),asm_invokestatic),
-        I32_TRUNC_U_F32(insertMethod(WASM_HELPER ,"floatToUnsignedInt","(F)I"),asm_invokestatic),
-        I32_TRUNC_S_F64(insertMethod(WASM_HELPER,"doubleToInt","(D)I"),asm_invokestatic),
-        I32_TRUNC_U_F64(insertMethod(WASM_HELPER ,"doubleToUnsignedInt","(D)I"),asm_invokestatic),
+        I32_TRUNC_S_F32(callHelper("floatToInt","(F)I")),
+        I32_TRUNC_U_F32(callHelper("floatToUnsignedInt","(F)I")),
+        I32_TRUNC_S_F64(callHelper("doubleToInt","(D)I")),
+        I32_TRUNC_U_F64(callHelper("doubleToUnsignedInt","(D)I")),
         I32_TRUNC_SAT_S_F32(asm_f2i),
-        I32_TRUNC_SAT_U_F32(insertMethod(WASM_HELPER ,"floatToSatUnsignedInt","(F)I"),asm_invokestatic),
+        I32_TRUNC_SAT_U_F32(callHelper("floatToSatUnsignedInt","(F)I")),
         I32_TRUNC_SAT_S_F64(asm_d2i),
-        I32_TRUNC_SAT_U_F64(insertMethod(WASM_HELPER ,"doubleToSatUnsignedInt","(D)I"),asm_invokestatic),
+        I32_TRUNC_SAT_U_F64(callHelper("doubleToSatUnsignedInt","(D)I")),
 
         I64_EXTEND_S_I32(asm_i2l),
         I64_EXTEND_U_I32(inv_iu2l),
-        I64_TRUNC_S_F32(insertMethod(WASM_HELPER,"floatToLong","(F)J"),asm_invokestatic),
-        I64_TRUNC_U_F32(insertMethod(WASM_HELPER ,"floatToUnsignedLong","(F)J"),asm_invokestatic),
-        I64_TRUNC_S_F64(insertMethod(WASM_HELPER,"doubleToLong","(D)J"),asm_invokestatic),
-        I64_TRUNC_U_F64(insertMethod(WASM_HELPER ,"doubleToUnsignedLong","(D)J"),asm_invokestatic),
+        I64_TRUNC_S_F32(callHelper("floatToLong","(F)J")),
+        I64_TRUNC_U_F32(callHelper("floatToUnsignedLong","(F)J")),
+        I64_TRUNC_S_F64(callHelper("doubleToLong","(D)J")),
+        I64_TRUNC_U_F64(callHelper("doubleToUnsignedLong","(D)J")),
         I64_TRUNC_SAT_S_F32(asm_f2l),
-        I64_TRUNC_SAT_U_F32(insertMethod(WASM_HELPER ,"floatToSatUnsignedLong","(F)J"),asm_invokestatic),
+        I64_TRUNC_SAT_U_F32(callHelper("floatToSatUnsignedLong","(F)J")),
         I64_TRUNC_SAT_S_F64(asm_d2l),
-        I64_TRUNC_SAT_U_F64(insertMethod(WASM_HELPER ,"doubleToSatUnsignedLong","(D)J"),asm_invokestatic),
+        I64_TRUNC_SAT_U_F64(callHelper("doubleToSatUnsignedLong","(D)J")),
 
         F32_CONVERT_S_I32(asm_i2f),
         F32_CONVERT_U_I32(inv_iu2l,asm_l2f),
         F32_CONVERT_S_I64(asm_l2f),
-        F32_CONVERT_U_I64(insertMethod(WASM_HELPER ,"unsignedLongToFloat","(J)F"),asm_invokestatic),
+        F32_CONVERT_U_I64(callHelper("unsignedLongToFloat","(J)F")),
         F32_DEMOTE_F64(asm_d2f),
 
         F64_CONVERT_S_I32(asm_i2d),
         F64_CONVERT_U_I32(inv_iu2l,asm_l2d),
         F64_CONVERT_S_I64(asm_l2d),
-        F64_CONVERT_U_I64(insertMethod(WASM_HELPER ,"unsignedLongToDouble","(J)D"),asm_invokestatic),
+        F64_CONVERT_U_I64(callHelper("unsignedLongToDouble","(J)D")),
         F64_PROMOTE_F32(asm_f2d),
         // reinterpret
         I32_REINTERPRET_F32(inv_fasi),
@@ -581,11 +574,6 @@ public class WasmMacroLib  extends StructuredMacroLib {
         @Override
         public JynxOp[] getJynxOps() {
             return jynxOps;
-        }
-
-        @Override
-        public boolean isExternal() {
-            return Character.isUpperCase(name().codePointAt(0));
         }
 
     }
