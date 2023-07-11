@@ -1,2 +1,4 @@
 jynxmacro.WasmMacroLib
 jynxmacro.StructuredMacroLib
+jynxmacro.ASMTextMacroLib
+jynxmacro.ExtensionMacroLib
