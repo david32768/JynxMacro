@@ -179,7 +179,7 @@ public class WasmMacroLib  extends MacroLib {
         IF(ext_IF_NEZ),
         ELSE(ext_ELSE),
         BR_IF(ext_BR_IFNEZ),
-        BR_TABLE(asm_tableswitch),
+        BR_TABLE(opc_switch),
         RETURN(ext_RETURN),
         END(ext_END),
         BR(ext_BR),
@@ -204,10 +204,12 @@ public class WasmMacroLib  extends MacroLib {
         LOCAL_GET(xxx_xload),
         LOCAL_SET(xxx_xstore),
         LOCAL_TEE(aux_dupn,xxx_xstore), // TEE pops and pushes value on stack
+
         I32_GLOBAL_GET(insert("I"),tok_swap,asm_getstatic),
         I64_GLOBAL_GET(insert("J"),tok_swap,asm_getstatic),
         F32_GLOBAL_GET(insert("F"),tok_swap,asm_getstatic),
         F64_GLOBAL_GET(insert("D"),tok_swap,asm_getstatic),
+
         I32_GLOBAL_SET(insert("I"),tok_swap,asm_putstatic),
         I64_GLOBAL_SET(insert("J"),tok_swap,asm_putstatic),
         F32_GLOBAL_SET(insert("F"),tok_swap,asm_putstatic),
