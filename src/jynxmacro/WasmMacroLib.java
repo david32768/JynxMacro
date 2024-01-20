@@ -14,7 +14,6 @@ import static jynx2asm.ops.LineOps.*;
 import static jynx2asm.ops.SelectOps.*;
 import static jynxmacro.StructuredMacroLib.StructuredOps.*;
 
-import jynx2asm.ops.AdjustToken;
 import jynx2asm.ops.CallOp;
 import jynx2asm.ops.DynamicOp;
 import jynx2asm.ops.IndentType;
@@ -28,17 +27,21 @@ public class WasmMacroLib  extends MacroLib {
 
     private final static String NAME = "wasm32MVP";
     
-    private final static String WASM_STORAGE = "wasmrun/Storage";
+    private final static String PACKAGE = "com/github/david32768/jynxwasi/";
+    private final static String WASM_STORAGE = PACKAGE + "Storage";
     private final static String WASM_STORAGE_L = nameL(WASM_STORAGE);
-    private final static String WASM_HELPER = "wasmrun/Helper";
-    private final static String WASM_TABLE = "wasmrun/Table";
+    private final static String WASM_HELPER = PACKAGE + "Helper";
+    private final static String WASM_ENVIRONMENT = PACKAGE + "Environment";
+    private final static String WASM_ENVIRONMENT_L =  nameL(WASM_ENVIRONMENT);
+    private final static String ENVIRONMENT_VAR = "__Environment";
+    private final static String GS_WASM_ENVIRONMENT = "GS:" + ENVIRONMENT_VAR + "()" + WASM_ENVIRONMENT_L;
+    private final static String WASM_TABLE = PACKAGE + "Table";
     private final static String WASM_TABLE_L =  nameL(WASM_TABLE);
+    private final static String WASM_TABLE_BUILDER = PACKAGE + "TableBuilder";
+    private final static String WASM_TABLE_BUILDER_L =  nameL(WASM_TABLE_BUILDER);
     private final static String MH_ARRAY_L = CallOp.parmName(MethodHandle[].class);
     private final static String MH_L = CallOp.parmName(MethodHandle.class);
-    private final static String TABLE_PREFIX = "__Table__";
-    private final static String MEMORY_PREFIX = "__Memory__";
-    private final static String GS_MEMORY_PREFIX = "GS:" + MEMORY_PREFIX;
-    private final static String GS_MEMORY_POSTFIX = "()" + WASM_STORAGE_L;
+    private static final String BOOTSTRAP = PACKAGE + "BootStraps";
 
     private static String nameL(String classname) {
         return 'L' + classname + ';'; 
@@ -100,13 +103,13 @@ public class WasmMacroLib  extends MacroLib {
     }
     
     private static DynamicOp dynStorage(String method, String parms) {
-        return DynamicOp.withBootParms(method, parms, WASM_STORAGE,
-            "storageBootstrap",MH_L);
+        return DynamicOp.withBootParms(method, parms, BOOTSTRAP,
+            "storageBootstrap", MH_L + "I");
     }
 
     protected static DynamicOp dynLoadStore(String method, String parms) {
-        return DynamicOp.withBootParms(method, parms, WASM_STORAGE,
-            "loadStoreBootstrap",MH_L + "I");
+        return DynamicOp.withBootParms(method, parms, BOOTSTRAP,
+            "loadStoreBootstrap", MH_L + "II");
     }
 
     private enum WasmOps implements MacroOp {
@@ -134,31 +137,48 @@ public class WasmMacroLib  extends MacroLib {
         aux_fstd_NaN(callHelper("arithmeticFloatNaN","(F)F")),
         aux_dstd_NaN(callHelper("arithmeticDoubleNaN","(D)D")),
         
-        aux_newtable(CallOp.of(WASM_TABLE,"getInstance","()" + WASM_TABLE_L)),
+        aux_newenv(CallOp.of(WASM_ENVIRONMENT,"of","(II)" + WASM_ENVIRONMENT_L)),
+        aux_newtablebuilder(CallOp.of(WASM_TABLE_BUILDER,"getInstance","()" + WASM_TABLE_BUILDER_L)),
         aux_newmem(CallOp.of(WASM_STORAGE,"getInstance","(II)" + WASM_STORAGE_L)),
-        aux_mem(AdjustToken.surround(GS_MEMORY_PREFIX, GS_MEMORY_POSTFIX)),
+        aux_mem(insert(GS_WASM_ENVIRONMENT)),
         aux_addbase0(insert("+0"),tok_swap),
+        aux_getenv(insert(WASM_ENVIRONMENT_L), insert(ENVIRONMENT_VAR), asm_getstatic),
+        aux_gettable(insert(WASM_TABLE_L),tok_swap,asm_getstatic),
+        aux_settable(insert(WASM_TABLE_L),tok_swap,asm_putstatic),
+        aux_getstorage(insert(WASM_STORAGE_L),tok_swap,asm_getstatic),
+        aux_setstorage(insert(WASM_STORAGE_L),tok_swap,asm_putstatic),
 
+        // init environment
+        ENVIRONMENT_NEW(opc_ildc, opc_ildc, aux_newenv,
+            insert(WASM_ENVIRONMENT_L), insert(ENVIRONMENT_VAR), asm_putstatic),
+        
+        ENVIRONMENT_IMPORT_TABLE(aux_getenv, aux_gettable, opc_ildc,
+            insertMethod(WASM_ENVIRONMENT,"importTable","(" + WASM_TABLE_L + "I)V"), asm_invokevirtual),
+        ENVIRONMENT_ADD_TABLE(aux_getenv, asm_swap, opc_ildc, insertMethod(WASM_ENVIRONMENT,"addTable","(" + WASM_TABLE_BUILDER_L + "I)V"), asm_invokevirtual),
+        ENVIRONMENT_EXPORT_TABLE(aux_getenv, opc_ildc,
+            insertMethod(WASM_ENVIRONMENT,"exportTable","(I)" + WASM_TABLE_L), asm_invokevirtual, aux_settable),
+    
+        ENVIRONMENT_IMPORT_STORAGE(aux_getenv, aux_getstorage, opc_ildc,
+            insertMethod(WASM_ENVIRONMENT,"importStorage","(" + WASM_STORAGE_L + "I)V"), asm_invokevirtual),
+        ENVIRONMENT_ADD_STORAGE(aux_getenv, asm_swap, opc_ildc, insertMethod(WASM_ENVIRONMENT,"addStorage","(" + WASM_STORAGE_L + "I)V"), asm_invokevirtual),
+        ENVIRONMENT_EXPORT_STORAGE(aux_getenv, opc_ildc,
+            insertMethod(WASM_ENVIRONMENT,"exportStorage","(I)" + WASM_STORAGE_L), asm_invokevirtual, aux_setstorage),
+    
         // init functions for initialising memory
         MEMORY_NEW(asm_ldc,asm_ldc,aux_newmem),
-        MEMORY_GLOBAL_GET(insert(WASM_STORAGE_L),tok_swap,asm_getstatic),
-        MEMORY_GLOBAL_SET(insert(WASM_STORAGE_L),tok_swap,asm_putstatic),
-        MEMORY_CHECK(asm_ldc,asm_ldc,aux_mem,WasmMacroLib.dynStorage("checkInstance", "(II)V")),
-        
+        MEMORY_CHECK(asm_ldc,asm_ldc,aux_mem,WasmMacroLib.dynStorage("checkInstance", "(II)V")),        
         STRING_CONST(asm_ldc),
         BASE64_STORE(aux_mem,WasmMacroLib.dynLoadStore("putBase64String",
-                CallOp.descFrom(void.class, int.class,String.class))),
+                CallOp.descFrom(void.class, int.class, String.class))),
         
         // init functions for initialising table
-        TABLE_NEW(aux_newtable),
-        TABLE_GLOBAL_GET(insert(WASM_TABLE_L),tok_swap,asm_getstatic),
-        TABLE_GLOBAL_SET(insert(WASM_TABLE_L),tok_swap,asm_putstatic),
+        TABLE_BUILD(aux_newtablebuilder),
         ADD_ENTRY(
                 opc_ildc,
                 asm_iadd,
                 DynamicOp.withBootParms("mharray", "()" + MH_ARRAY_L,
-                    WASM_TABLE, "constantArrayBootstrap",MH_ARRAY_L),
-                insertMethod(WASM_TABLE,"add","(I" + MH_ARRAY_L + ")" + WASM_TABLE_L),
+                    BOOTSTRAP, "constantArrayBootstrap", MH_ARRAY_L),
+                insertMethod(WASM_TABLE_BUILDER,"add","(I" + MH_ARRAY_L + ")" + WASM_TABLE_BUILDER_L),
                 asm_invokevirtual
         ),
         // init local
@@ -185,16 +205,16 @@ public class WasmMacroLib  extends MacroLib {
         BR(ext_BR),
         CALL(asm_invokestatic),
         CALL_INDIRECT(
-                prepend(TABLE_PREFIX),
-                insert(WASM_TABLE_L),
-                tok_swap,
+                insert(WASM_ENVIRONMENT_L),
+                insert(ENVIRONMENT_VAR),
                 asm_getstatic,
                 asm_swap,
-                insertMethod(WASM_TABLE, "getMH", "(I)" + MH_L),
+                opc_ildc,
+                insertMethod(WASM_ENVIRONMENT, "getMH", "(II)" + MH_L),
                 asm_invokevirtual,
                 translateDesc(),
                 replace("I)", MH_L + ")"),
-                DynamicOp.of("invokeExact", null, WASM_TABLE,"callIndirectBootstrapMH")),
+                DynamicOp.of("invokeExact", null, BOOTSTRAP, "callIndirectBootstrapMH")),
         // parametric operators
         NOP(asm_nop),
         DROP(aux_popn),
