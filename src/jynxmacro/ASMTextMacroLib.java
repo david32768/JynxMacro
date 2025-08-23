@@ -1,26 +1,27 @@
 package jynxmacro;
 
+import java.util.function.Predicate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import static jynx2asm.ops.AdjustToken.join;
-import static jynx2asm.ops.AdjustToken.LC;
-import static jynx2asm.ops.AdjustToken.removePrefix;
-import jynx2asm.ops.JvmOp;
-import static jynx2asm.ops.JvmOp.*;
-import static jynx2asm.ops.LineOps.tok_skip;
-import static jynx2asm.ops.LineOps.tok_skipall;
-import static jynx2asm.ops.LineOps.tok_swap;
-import static jynx2asm.ops.MessageOp.ignoreMacro;
-import static jynx2asm.ops.MessageOp.unsupportedMacro;
-import static jynx2asm.ops.TestToken.check;
-import static jynx2asm.ops.TestToken.checkNot;
+import static com.github.david32768.jynxfor.ops.JvmOp.*;
 
-import jynx2asm.ops.JynxOp;
-import jynx2asm.ops.MacroLib;
-import jynx2asm.ops.MacroOp;
+import static com.github.david32768.jynxfor.ops.AdjustToken.join;
+import static com.github.david32768.jynxfor.ops.AdjustToken.LC;
+import static com.github.david32768.jynxfor.ops.AdjustToken.removePrefix;
+import static com.github.david32768.jynxfor.ops.LineOps.tok_skip;
+import static com.github.david32768.jynxfor.ops.LineOps.tok_skipall;
+import static com.github.david32768.jynxfor.ops.LineOps.tok_swap;
+import static com.github.david32768.jynxfor.ops.MessageOp.ignoreMacro;
+import static com.github.david32768.jynxfor.ops.MessageOp.unsupportedMacro;
+import static com.github.david32768.jynxfor.ops.TestToken.check;
+import static com.github.david32768.jynxfor.ops.TestToken.checkNot;
+
+import com.github.david32768.jynxfor.ops.JvmOp;
+import com.github.david32768.jynxfor.ops.JynxOp;
+import com.github.david32768.jynxfor.ops.MacroLib;
+import com.github.david32768.jynxfor.ops.MacroOp;
 
 public class ASMTextMacroLib extends MacroLib {
             
@@ -52,6 +53,7 @@ public class ASMTextMacroLib extends MacroLib {
         
         // Unsupported
         LDC(unsupportedMacro("Jynx ldc used instead but different format if not int or double"),asm_ldc),
+        LDC2_W(unsupportedMacro("Jynx ldc2_w used instead but different format for dynamic constant"),opc_ldc2_w),
         INVOKEDYNAMIC(unsupportedMacro("use Jynx invokedynamic instead as different format")),
         LOOKUPSWITCH(unsupportedMacro("use Jynx lookupswitch instead as different format")),
         TABLESWITCH(unsupportedMacro("use Jynx tableswitch instead as different format")),

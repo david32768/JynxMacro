@@ -6,22 +6,23 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static jynx2asm.ops.AdjustToken.*;
-import static jynx2asm.ops.ExtendedOps.*;
-import static jynx2asm.ops.JavaCallOps.*;
-import static jynx2asm.ops.JvmOp.*;
-import static jynx2asm.ops.LineOps.*;
-import static jynx2asm.ops.SelectOps.*;
-import static jynxmacro.StructuredMacroLib.StructuredOps.*;
+import static com.github.david32768.jynxfor.ops.AdjustToken.*;
+import static com.github.david32768.jynxfor.ops.ExtendedOps.*;
+import static com.github.david32768.jynxfor.ops.JavaCallOps.*;
+import static com.github.david32768.jynxfor.ops.JvmOp.*;
+import static com.github.david32768.jynxfor.ops.LineOps.*;
+import static com.github.david32768.jynxfor.ops.SelectOps.*;
 
-import jynx2asm.ops.CallOp;
-import jynx2asm.ops.DynamicOp;
-import jynx2asm.ops.IndentType;
-import jynx2asm.ops.JynxOp;
-import jynx2asm.ops.MacroLib;
-import jynx2asm.ops.MacroOp;
-import jynx2asm.ops.MacroOption;
-import jynx2asm.ops.SelectOps;
+import com.github.david32768.jynxfor.ops.CallOp;
+import com.github.david32768.jynxfor.ops.DynamicOp;
+import com.github.david32768.jynxfor.ops.IndentType;
+import com.github.david32768.jynxfor.ops.JynxOp;
+import com.github.david32768.jynxfor.ops.MacroLib;
+import com.github.david32768.jynxfor.ops.MacroOp;
+import com.github.david32768.jynxfor.ops.MacroOption;
+import com.github.david32768.jynxfor.ops.SelectOps;
+
+import static jynxmacro.StructuredMacroLib.StructuredOps.*;
 
 public class WasmMacroLib  extends MacroLib {
 
@@ -63,7 +64,7 @@ public class WasmMacroLib  extends MacroLib {
 
     @Override
     public EnumSet<MacroOption> getOptions() {
-        return EnumSet.of(MacroOption.STRUCTURED_LABELS, MacroOption.INDENT, MacroOption.UNSIGNED_LONG);
+        return EnumSet.of(MacroOption.STRUCTURED_LABELS, MacroOption.INDENT);
     }
 
     private static final Map<String, String> PARM_MAP;
@@ -100,6 +101,10 @@ public class WasmMacroLib  extends MacroLib {
     
     private static JynxOp callHelper(String methodname, String desc) {
         return CallOp.of(WASM_HELPER, methodname, desc);
+    }
+    
+    private static JynxOp callWasi(String methodname, String desc) {
+        return CallOp.of(WASI, methodname, desc);
     }
     
     private static DynamicOp dynStorage(String method, String parms) {
@@ -190,7 +195,9 @@ public class WasmMacroLib  extends MacroLib {
         LOG(SelectOps.stackILFDA(inv_ibox, inv_lbox, inv_fbox, inv_dbox, asm_nop),
                 asm_ldc,
                 callHelper("log",CallOp.descFrom(void.class, Number.class, String.class))),
-        
+        ENTER(opc_ildc, callWasi("__enter", "(I)I"), asm_pop),
+        LEAVE(opc_ildc, callWasi("__leave", "(I)I"), asm_pop),
+        LINE(line_num, opc_ildc, callWasi("__line", "(I)I"), asm_pop),
         
         // control operators
         UNREACHABLE(callHelper("unreachable",CallOp.descFrom(AssertionError.class)), asm_athrow),
@@ -223,7 +230,23 @@ public class WasmMacroLib  extends MacroLib {
         // variable access
         LOCAL_GET(xxx_xload),
         LOCAL_SET(xxx_xstore),
-        LOCAL_TEE(aux_dupn,xxx_xstore), // TEE pops and pushes value on stack
+        LOCAL_TEE(aux_dupn,xxx_xstore), // TEE  = SET then GET
+
+        I32_LOCAL_GET(asm_iload),
+        I32_LOCAL_SET(asm_istore),
+        I32_LOCAL_TEE(asm_dup, asm_istore), // TEE = SET then GET
+
+        I64_LOCAL_GET(asm_lload),
+        I64_LOCAL_SET(asm_lstore),
+        I64_LOCAL_TEE(asm_dup2, asm_lstore), // TEE = SET then GET
+
+        F32_LOCAL_GET(asm_fload),
+        F32_LOCAL_SET(asm_fstore),
+        F32_LOCAL_TEE(asm_dup, asm_fstore), // TEE = SET then GET
+
+        F64_LOCAL_GET(asm_dload),
+        F64_LOCAL_SET(asm_dstore),
+        F64_LOCAL_TEE(asm_dup2, asm_dstore), // TEE  = SET then GET
 
         I32_GLOBAL_GET(insert("I"),tok_swap,asm_getstatic),
         I64_GLOBAL_GET(insert("J"),tok_swap,asm_getstatic),

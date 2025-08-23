@@ -3,11 +3,11 @@ package jynxmacro;
 import java.util.HashMap;
 import java.util.Map;
 
-import jynx2asm.ops.ExtendedOps;
-import jynx2asm.ops.JavaCallOps;
-import jynx2asm.ops.JynxOp;
-import jynx2asm.ops.MacroLib;
-import jynx2asm.ops.SelectOps;
+import com.github.david32768.jynxfor.ops.ExtendedOps;
+import com.github.david32768.jynxfor.ops.JavaCallOps;
+import com.github.david32768.jynxfor.ops.JynxOp;
+import com.github.david32768.jynxfor.ops.MacroLib;
+import com.github.david32768.jynxfor.ops.SelectOps;
 
 public class ExtensionMacroLib extends MacroLib {
             

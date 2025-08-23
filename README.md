@@ -1,6 +1,6 @@
 # JynxMacro
 
-this contains some "macro" libraries for Jynx.
+this contains some "macro" libraries for JynxFree jynx
 
 These are:
 

@@ -5,16 +5,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static jynx2asm.ops.ExtendedOps.*;
-import static jynx2asm.ops.JvmOp.*;
-import static jynx2asm.ops.LineOps.*;
-import static jynx2asm.ops.SelectOps.xxx_xreturn;
+import static com.github.david32768.jynxfor.ops.ExtendedOps.*;
+import static com.github.david32768.jynxfor.ops.JvmOp.*;
+import static com.github.david32768.jynxfor.ops.LineOps.*;
+import static com.github.david32768.jynxfor.ops.SelectOps.xxx_xreturn;
 
-import jynx2asm.ops.IndentType;
-import jynx2asm.ops.JynxOp;
-import jynx2asm.ops.MacroLib;
-import jynx2asm.ops.MacroOp;
-import jynx2asm.ops.MacroOption;
+import com.github.david32768.jynxfor.ops.IndentType;
+import com.github.david32768.jynxfor.ops.JynxOp;
+import com.github.david32768.jynxfor.ops.MacroLib;
+import com.github.david32768.jynxfor.ops.MacroOp;
+import com.github.david32768.jynxfor.ops.MacroOption;
 
 public class StructuredMacroLib extends MacroLib {
             
